@@ -21,10 +21,10 @@ jobs:
           
           # 1. 抓取源 Release 的标题和正文 (用于同步信息)
           # 使用 --json 提取并存入环境变量
-          # echo "RELEASE_TITLE=$(gh release view ${{ github.event.inputs.tag_name }} --repo $REMOTE_REPO --json title -q .name)" >> $GITHUB_ENV
+          # echo "RELEASE_TITLE=$(gh release view ${{ github.event.inputs.tag_name }} --repo $REMOTE_REPO --json title -q .title)" >> $GITHUB_ENV
           # echo "RELEASE_BODY=$(gh release view ${{ github.event.inputs.tag_name }} --repo $REMOTE_REPO --json body -q .body)" >> $GITHUB_ENV
           
-          RELEASE_TITLE=$(gh release view "$TAG" --repo "$REMOTE_REPO" --json title --template '{{.title}}')
+          RELEASE_TITLE=$(gh release view "$TAG" --repo "$REMOTE_REPO" --json title --template '{{.name}}')
           echo "RELEASE_TITLE=$RELEASE_TITLE" >> $GITHUB_ENV
           
           # 2. 抓取正文存入文件
