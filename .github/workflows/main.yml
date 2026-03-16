@@ -1,13 +1,6 @@
 name: Manual Create Release
 on:
   workflow_dispatch:
-    inputs:
-      file_urls:
-        description: 'Upload URLs (,)'
-        required: true
-      tag_name:
-        description: 'Tag'
-        required: true
 
 jobs:
   upload:
