@@ -1,12 +1,12 @@
-name: Manual Private File Release
+name: Manual Create Release
 on:
   workflow_dispatch:
     inputs:
       file_urls:
-        description: '私有库文件 URLs (每行一个)'
+        description: 'Upload URLs (,)'
         required: true
       tag_name:
-        description: '发布到本仓库的 Tag'
+        description: 'Tag'
         required: true
 
 jobs:
@@ -15,39 +15,33 @@ jobs:
     steps:
       - name: Download and Clean
         env:
-          # 确保这里定义的变量名和下面脚本引用的一致
           URL_INPUT: ${{ github.event.inputs.file_urls }}
           PRIVATE_TOKEN: ${{ secrets.EXTERNAL_REPO_TOKEN }}
         run: |
           mkdir -p ./downloads
           
-          # 1. 强力清洗输入：删除换行、回车、空格，只保留逗号分隔的 URL
           CLEAN_STR=$(echo "$URL_INPUT" | tr -d '[:space:]\r\n')
           echo "CLEAN_STR: $CLEAN_STR"
 
-          # 2. 解析逗号并下载
           IFS=',' read -ra ADDR <<< "$CLEAN_STR"
           for url in "${ADDR[@]}"; do
             [ -z "$url" ] && continue
             
-            # 提取文件名
             filename=$(basename "${url%%\?*}")
             echo "--------------------------------"
-            echo "正在下载: $filename"
+            echo "Downloading...: $filename"
             
             curl -H "Authorization: token $PRIVATE_TOKEN" \
                  -L -f -s -S \
                  -o "./downloads/$filename" \
-                 "$url" || echo "❌ 下载失败: $url"
+                 "$url" || echo "Failed to download: $url"
           done
 
-          # 3. 检查是否有文件下载成功
           ls -R ./downloads
 
       - name: Create and Upload to Release
         uses: softprops/action-gh-release@v2
         with:
-          # 关键：自动把输入的 tag_name 里的空格换成横杠，防止报错
           tag_name: ${{ github.event.inputs.tag_name }}
           files: ./downloads/*
           generate_release_notes: true
