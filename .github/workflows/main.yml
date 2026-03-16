@@ -13,7 +13,6 @@ jobs:
     steps:
       - name: Download from Private Repo
         env:
-          # 关键：gh 命令会自动识别这个变量名作为身份验证
           GH_TOKEN: ${{ secrets.EXTERNAL_REPO_TOKEN }}
           REMOTE_REPO: "ac169/FFmpeg-Builds-Legacy"
         run: |
@@ -30,7 +29,7 @@ jobs:
           # 2. 抓取正文存入文件
           gh release view "$TAG" --repo "$REMOTE_REPO" --json body --template '{{.body}}' > release_body.md
 
-          # 2. 直接下载所有 Assets (gh 默认不下载 Source code)
+          # 3. 直接下载所有 Assets
           gh release download ${{ github.event.inputs.tag_name }} \
              --repo $REMOTE_REPO \
              --dir ./downloads \
@@ -42,8 +41,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag_name }}
-          # name: ${{ env.RELEASE_TITLE }}
-          # body: ${{ env.RELEASE_BODY }}
           name: ${{ env.RELEASE_TITLE }}
           body_path: release_body.md
           files: ./downloads/*
