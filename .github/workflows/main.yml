@@ -19,15 +19,13 @@ jobs:
           mkdir -p ./downloads
           TAG_NAME="${{ github.event.inputs.tag_name }}"
 
-          # 1. 抓取标题 (使用 EOF 确保支持空格和特殊字符)
-          echo "RELEASE_TITLE<<EOF" >> $GITHUB_ENV
-          gh release view "$TAG_NAME" --repo "$REMOTE_REPO" --json title -q .title >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          # 1. 抓取标题 (单行通常没问题，直接赋值)
+          # 使用 -q .title 获取纯文本标题
+          TITLE=$(gh release view "$TAG_NAME" --repo "$REMOTE_REPO" --json title -q .title)
+          echo "RELEASE_TITLE=$TITLE" >> $GITHUB_ENV
           
-          # 2. 抓取正文
-          echo "RELEASE_BODY<<EOF" >> $GITHUB_ENV
-          gh release view "$TAG_NAME" --repo "$REMOTE_REPO" --json body -q .body >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          # 2. 抓取正文 (多行内容直接存入文件，最稳妥)
+          gh release view "$TAG_NAME" --repo "$REMOTE_REPO" --json body -q .body > release_body.md
 
           # 3. 下载 Assets
           gh release download "$TAG_NAME" --repo "$REMOTE_REPO" --dir ./downloads --clobber
@@ -36,9 +34,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag_name }}
-          name: ${{ env.RELEASE_TITLE }}  # 这里显式指定标题
-          body: ${{ env.RELEASE_BODY }}   # 这里显式指定正文
+          name: ${{ env.RELEASE_TITLE }}        # 使用抓取到的标题
+          body_path: ./release_body.md         # 从文件读取正文，避开环境变量报错
           files: ./downloads/*
-          generate_release_notes: false   # 必须设为 false，否则会覆盖我们抓取的 body
+          generate_release_notes: false        # 禁用自动生成，保持原汁原味
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
