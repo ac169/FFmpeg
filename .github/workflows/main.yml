@@ -6,8 +6,34 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Run action
-        uses: andrewthetechie/gha-clone-releases@v1
-        with:
-          token: ${{ secrets.SYNS_TOKEN }}
-          src_repo: ac169/FFmpeg-Builds-Legacy
+      - name: Sync Releases using GitHub CLI
+        env:
+          GH_TOKEN: ${{ secrets.SYNS_TOKEN }}
+          SOURCE_REPO: "ac169/FFmpeg-Builds-Legacy"
+          TARGET_REPO: "${GITHUB_REPOSITORY,,}"
+        run: |
+          # 1. 获取源仓库最近的 10 个 tag (按需调整 limit)
+          tags=$(gh release list --repo $SOURCE_REPO --limit 10 | awk '{print $1}')
+
+          for tag in $tags; do
+            echo "Processing tag: $tag"
+            
+            # 检查目标仓库是否已存在
+            if gh release view $tag --repo $TARGET_REPO >/dev/null 2>&1; then
+              echo "Release $tag already exists. Skipping."
+              continue
+            fi
+
+            # 2. 下载附件
+            mkdir -p ./assets
+            gh release download $tag --repo $SOURCE_REPO --dir ./assets --skip-existing || true
+
+            # 3. 创建 Release (使用 --generate-notes 自动生成描述，避免空 body 错误)
+            # 如果想保留原描述，可以用 gh release view $tag --repo $SOURCE_REPO --json body -q .body
+            gh release create $tag ./assets/* \
+              --repo $TARGET_REPO \
+              --title "$tag" \
+              --notes "Synced from $SOURCE_REPO" || echo "Failed to sync $tag"
+
+            rm -rf ./assets
+          done
