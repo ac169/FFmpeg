@@ -44,7 +44,7 @@ jobs:
           tag_name: ${{ github.event.inputs.tag_name }}
           # name: ${{ env.RELEASE_TITLE }}
           # body: ${{ env.RELEASE_BODY }}
-          name: ${env.RELEASE_TITLE}
+          name: ${{ env.RELEASE_TITLE }}
           body_path: release_body.md
           files: ./downloads/*
           generate_release_notes: false
