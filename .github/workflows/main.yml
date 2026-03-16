@@ -3,53 +3,61 @@ name: Manual Sync Release from Private Repo
 on:
   workflow_dispatch:
     inputs:
-      remote_repo:
-        description: '源私有仓库 (例如: ac169/FFmpeg-Builds-Legacy)'
-        required: true
-        default: 'ac169/FFmpeg-Builds-Legacy'
       tag_name:
-        description: '源仓库的 Tag 名'
+        description: '源仓库的 Tag 名 (例如: 6fe7583)'
         required: true
-      file_pattern:
-        description: '要下载的文件匹配模式 (支持 *, 留空下载全部)'
-        required: false
-        default: '*'
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # 确保有权创建 Release
+    
     steps:
-      - name: Checkout Current Repo
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download from Private Repo
+      - name: Fetch Metadata and Download Assets
+        id: fetch_data
         env:
-          # 使用你定义的外部私有库 Token
           GH_TOKEN: ${{ secrets.EXTERNAL_REPO_TOKEN }}
+          REMOTE_REPO: "ac169/FFmpeg-Builds-Legacy"
         run: |
           mkdir -p ./downloads
-          echo "Connecting to private repo: ${{ github.event.inputs.remote_repo }}..."
+          TAG="${{ github.event.inputs.tag_name }}"
           
-          # 使用 gh release download 直接下载
-          # --pattern 支持通配符，如果不指定则下载该 Release 下所有文件
-          gh release download ${{ github.event.inputs.tag_name }} \
-            --repo ${{ github.event.inputs.remote_repo }} \
-            --pattern "${{ github.event.inputs.file_pattern }}" \
+          echo ">>> 正在抓取源 Release 元数据..."
+          # 获取标题和内容，并存入环境变量供后续步骤使用
+          # 使用 --json 提取字段，防止特殊字符导致 shell 脚本报错
+          gh release view "$TAG" --repo "$REMOTE_REPO" --json title,body > release_info.json
+          
+          # 导出给后续步骤
+          echo "TITLE=$(jq -r .title release_info.json)" >> $GITHUB_ENV
+          
+          # 处理多行正文 (Body) 的特殊写法
+          echo "BODY<<EOF" >> $GITHUB_ENV
+          jq -r .body release_info.json >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+          echo ">>> 正在下载二进制 Assets (排除源码)..."
+          # gh release download 默认就不会下载 Source Code (zip/tar.gz)
+          # 它只下载用户上传的 Assets 文件
+          gh release download "$TAG" \
+            --repo "$REMOTE_REPO" \
             --dir ./downloads \
             --clobber
 
-          echo "Downloaded files:"
+          echo ">>> 下载完成，文件列表："
           ls -lh ./downloads
 
-      - name: Create Release in Current Repo
+      - name: Create Synchronized Release
         uses: softprops/action-gh-release@v2
         with:
-          # 同步到当前仓库的 Tag 名（可以和源仓库一致，也可以自定义）
           tag_name: ${{ github.event.inputs.tag_name }}
+          name: ${{ env.TITLE }}
+          body: ${{ env.BODY }}
           files: ./downloads/*
-          generate_release_notes: true
-          # 设为 true 如果你想覆盖已存在的 release
-          make_latest: true
+          # 既然是同步，我们直接延用源仓库的信息，不让 Action 自动生成
+          generate_release_notes: false
         env:
-          # 使用当前仓库默认的 GITHUB_TOKEN 写入权限
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
