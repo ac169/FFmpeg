@@ -32,6 +32,7 @@ jobs:
             echo "Downloading...: $filename"
             
             curl -H "Authorization: token $PRIVATE_TOKEN" \
+                 -H "Accept: application/octet-stream" \
                  -L -f -s -S \
                  -o "./downloads/$filename" \
                  "$url" || echo "Failed to download: $url"
