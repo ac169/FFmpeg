@@ -21,8 +21,15 @@ jobs:
           
           # 1. 抓取源 Release 的标题和正文 (用于同步信息)
           # 使用 --json 提取并存入环境变量
-          echo "RELEASE_TITLE=$(gh release view ${{ github.event.inputs.tag_name }} --repo $REMOTE_REPO --json title -q .title)" >> $GITHUB_ENV
-          echo "RELEASE_BODY=$(gh release view ${{ github.event.inputs.tag_name }} --repo $REMOTE_REPO --json body -q .body)" >> $GITHUB_ENV
+          # 1. 抓取标题 (使用 EOF 确保支持空格和特殊字符)
+          echo "RELEASE_TITLE<<EOF" >> $GITHUB_ENV
+          gh release view "$TAG_NAME" --repo "$REMOTE_REPO" --json title -q .title >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          
+          # 2. 抓取正文
+          echo "RELEASE_BODY<<EOF" >> $GITHUB_ENV
+          gh release view "$TAG_NAME" --repo "$REMOTE_REPO" --json body -q .body >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
           # 2. 直接下载所有 Assets (gh 默认不下载 Source code)
           gh release download ${{ github.event.inputs.tag_name }} \
