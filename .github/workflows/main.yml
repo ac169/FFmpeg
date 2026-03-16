@@ -1,63 +1,44 @@
-name: Manual Sync Release from Private Repo
+name: Manual Sync Release
 
 on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: '源仓库的 Tag 名 (例如: 6fe7583)'
+        description: 'Tag'
         required: true
 
 jobs:
-  sync:
+  upload:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # 确保有权创建 Release
-    
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Fetch Metadata and Download Assets
-        id: fetch_data
+      - name: Download from Private Repo
         env:
+          # 关键：gh 命令会自动识别这个变量名作为身份验证
           GH_TOKEN: ${{ secrets.EXTERNAL_REPO_TOKEN }}
           REMOTE_REPO: "ac169/FFmpeg-Builds-Legacy"
         run: |
           mkdir -p ./downloads
-          TAG="${{ github.event.inputs.tag_name }}"
           
-          echo ">>> 正在抓取源 Release 元数据..."
-          # 获取标题和内容，并存入环境变量供后续步骤使用
-          # 使用 --json 提取字段，防止特殊字符导致 shell 脚本报错
-          gh release view "$TAG" --repo "$REMOTE_REPO" --json title,body > release_info.json
-          
-          # 导出给后续步骤
-          echo "TITLE=$(jq -r .title release_info.json)" >> $GITHUB_ENV
-          
-          # 处理多行正文 (Body) 的特殊写法
-          echo "BODY<<EOF" >> $GITHUB_ENV
-          jq -r .body release_info.json >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          # 1. 抓取源 Release 的标题和正文 (用于同步信息)
+          # 使用 --json 提取并存入环境变量
+          echo "RELEASE_TITLE=$(gh release view ${{ github.event.inputs.tag_name }} --repo $REMOTE_REPO --json title -q .title)" >> $GITHUB_ENV
+          echo "RELEASE_BODY=$(gh release view ${{ github.event.inputs.tag_name }} --repo $REMOTE_REPO --json body -q .body)" >> $GITHUB_ENV
 
-          echo ">>> 正在下载二进制 Assets (排除源码)..."
-          # gh release download 默认就不会下载 Source Code (zip/tar.gz)
-          # 它只下载用户上传的 Assets 文件
-          gh release download "$TAG" \
-            --repo "$REMOTE_REPO" \
-            --dir ./downloads \
-            --clobber
+          # 2. 直接下载所有 Assets (gh 默认不下载 Source code)
+          gh release download ${{ github.event.inputs.tag_name }} \
+             --repo $REMOTE_REPO \
+             --dir ./downloads \
+             --clobber
 
-          echo ">>> 下载完成，文件列表："
-          ls -lh ./downloads
+          ls -R ./downloads
 
-      - name: Create Synchronized Release
+      - name: Create and Upload to Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag_name }}
-          name: ${{ env.TITLE }}
-          body: ${{ env.BODY }}
+          name: ${{ env.RELEASE_TITLE }}
+          body: ${{ env.RELEASE_BODY }}
           files: ./downloads/*
-          # 既然是同步，我们直接延用源仓库的信息，不让 Action 自动生成
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
