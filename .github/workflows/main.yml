@@ -24,7 +24,7 @@ jobs:
           # echo "RELEASE_TITLE=$(gh release view ${{ github.event.inputs.tag_name }} --repo $REMOTE_REPO --json title -q .title)" >> $GITHUB_ENV
           # echo "RELEASE_BODY=$(gh release view ${{ github.event.inputs.tag_name }} --repo $REMOTE_REPO --json body -q .body)" >> $GITHUB_ENV
           
-          RELEASE_TITLE=$(gh release view "$TAG" --repo "$REMOTE_REPO" --json title --template '{{.name}}')
+          TITLE=$(gh release view "${{ github.event.inputs.tag_name }}" --repo $REMOTE_REPO --json name --template '{{.name}}')
           echo "RELEASE_TITLE=$RELEASE_TITLE" >> $GITHUB_ENV
           
           # 2. 抓取正文存入文件
