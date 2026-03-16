@@ -21,8 +21,14 @@ jobs:
           
           # 1. 抓取源 Release 的标题和正文 (用于同步信息)
           # 使用 --json 提取并存入环境变量
-          echo "RELEASE_TITLE=$(gh release view ${{ github.event.inputs.tag_name }} --repo $REMOTE_REPO --json title -q .title)" >> $GITHUB_ENV
-          echo "RELEASE_BODY=$(gh release view ${{ github.event.inputs.tag_name }} --repo $REMOTE_REPO --json body -q .body)" >> $GITHUB_ENV
+          # echo "RELEASE_TITLE=$(gh release view ${{ github.event.inputs.tag_name }} --repo $REMOTE_REPO --json title -q .title)" >> $GITHUB_ENV
+          # echo "RELEASE_BODY=$(gh release view ${{ github.event.inputs.tag_name }} --repo $REMOTE_REPO --json body -q .body)" >> $GITHUB_ENV
+          
+          RELEASE_TITLE=$(gh release view "$TAG" --repo "$REMOTE_REPO" --json title --template '{{.title}}')
+          echo "RELEASE_TITLE=$RELEASE_TITLE" >> $GITHUB_ENV
+          
+          # 2. 抓取正文存入文件
+          gh release view "$TAG" --repo "$REMOTE_REPO" --json body --template '{{.body}}' > release_body.md
 
           # 2. 直接下载所有 Assets (gh 默认不下载 Source code)
           gh release download ${{ github.event.inputs.tag_name }} \
@@ -36,8 +42,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag_name }}
-          name: ${{ env.RELEASE_TITLE }}
-          body: ${{ env.RELEASE_BODY }}
+          # name: ${{ env.RELEASE_TITLE }}
+          # body: ${{ env.RELEASE_BODY }}
+          name: ${env.RELEASE_TITLE}
+          body_path: release_body.md
           files: ./downloads/*
           generate_release_notes: false
         env:
