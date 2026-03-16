@@ -1,51 +1,55 @@
-name: Manual Create Release
+name: Manual Sync Release from Private Repo
 
 on:
   workflow_dispatch:
     inputs:
-      file_urls:
-        description: 'Upload URLs (,)'
+      remote_repo:
+        description: '源私有仓库 (例如: ac169/FFmpeg-Builds-Legacy)'
         required: true
+        default: 'ac169/FFmpeg-Builds-Legacy'
       tag_name:
-        description: 'Tag'
+        description: '源仓库的 Tag 名'
         required: true
+      file_pattern:
+        description: '要下载的文件匹配模式 (支持 *, 留空下载全部)'
+        required: false
+        default: '*'
 
 jobs:
-  upload:
+  sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Download and Clean
+      - name: Checkout Current Repo
+        uses: actions/checkout@v4
+
+      - name: Download from Private Repo
         env:
-          URL_INPUT: ${{ github.event.inputs.file_urls }}
-          PRIVATE_TOKEN: ${{ secrets.EXTERNAL_REPO_TOKEN }}
+          # 使用你定义的外部私有库 Token
+          GH_TOKEN: ${{ secrets.EXTERNAL_REPO_TOKEN }}
         run: |
           mkdir -p ./downloads
+          echo "Connecting to private repo: ${{ github.event.inputs.remote_repo }}..."
           
-          CLEAN_STR=$(echo "$URL_INPUT" | tr -d '[:space:]\r\n')
-          echo "CLEAN_STR: $CLEAN_STR"
+          # 使用 gh release download 直接下载
+          # --pattern 支持通配符，如果不指定则下载该 Release 下所有文件
+          gh release download ${{ github.event.inputs.tag_name }} \
+            --repo ${{ github.event.inputs.remote_repo }} \
+            --pattern "${{ github.event.inputs.file_pattern }}" \
+            --dir ./downloads \
+            --clobber
 
-          IFS=',' read -ra ADDR <<< "$CLEAN_STR"
-          for url in "${ADDR[@]}"; do
-            [ -z "$url" ] && continue
-            
-            filename=$(basename "${url%%\?*}")
-            echo "--------------------------------"
-            echo "Downloading...: $filename"
-            
-            curl -H "Authorization: token $PRIVATE_TOKEN" \
-                 -H "Accept: application/octet-stream" \
-                 -L -f -s -S \
-                 -o "./downloads/$filename" \
-                 "$url" || echo "Failed to download: $url"
-          done
+          echo "Downloaded files:"
+          ls -lh ./downloads
 
-          ls -R ./downloads
-
-      - name: Create and Upload to Release
+      - name: Create Release in Current Repo
         uses: softprops/action-gh-release@v2
         with:
+          # 同步到当前仓库的 Tag 名（可以和源仓库一致，也可以自定义）
           tag_name: ${{ github.event.inputs.tag_name }}
           files: ./downloads/*
           generate_release_notes: true
+          # 设为 true 如果你想覆盖已存在的 release
+          make_latest: true
         env:
+          # 使用当前仓库默认的 GITHUB_TOKEN 写入权限
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
