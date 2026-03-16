@@ -13,56 +13,43 @@ jobs:
   upload:
     runs-on: ubuntu-latest
     steps:
-      - name: Download Multiple Files
+      - name: Download and Clean
         env:
-          # 关键：先将 inputs 存入环境变量，避免 shell 注入和换行符丢失
-          RAW_URLS: ${{ github.event.inputs.file_urls }}
+          # 确保这里定义的变量名和下面脚本引用的一致
+          URL_INPUT: ${{ github.event.inputs.file_urls }}
           PRIVATE_TOKEN: ${{ secrets.EXTERNAL_REPO_TOKEN }}
         run: |
           mkdir -p ./downloads
           
-          # 1. 强力清洗：删除所有空格、换行符和回车符
-          # 确保输入变成纯粹的 url1,url2,url3 格式
-          CLEAN_INPUT=$(echo "$RAW_INPUT" | tr -d '[:space:]\r\n')
-          
-          echo "--- 待下载列表（逗号分割） ---"
-          echo "$CLEAN_INPUT"
-          echo "---------------------------"
+          # 1. 强力清洗输入：删除换行、回车、空格，只保留逗号分隔的 URL
+          CLEAN_STR=$(echo "$URL_INPUT" | tr -d '[:space:]\r\n')
+          echo "CLEAN_STR: $CLEAN_STR"
 
-          # 2. 将逗号替换为空格，循环处理每一个 URL
-          # 使用 IFS=',' 读取可以完美处理逗号分隔符
-          IFS=',' read -ra ADDR <<< "$CLEAN_INPUT"
+          # 2. 解析逗号并下载
+          IFS=',' read -ra ADDR <<< "$CLEAN_STR"
           for url in "${ADDR[@]}"; do
             [ -z "$url" ] && continue
             
-            # 提取文件名（去除 ? 后的参数）
-            # 例如: https://.../file.zip?token=xxx -> file.zip
+            # 提取文件名
             filename=$(basename "${url%%\?*}")
+            echo "--------------------------------"
+            echo "正在下载: $filename"
             
-            echo "开始下载: $filename"
-            
-            # 3. 执行下载，使用 -f 确保 HTTP 错误时返回非零状态
             curl -H "Authorization: token $PRIVATE_TOKEN" \
                  -L -f -s -S \
                  -o "./downloads/$filename" \
-                 "$url"
-
-            if [ $? -eq 0 ]; then
-               echo "✅ 成功: $filename"
-            else
-               echo "❌ 失败: $url (请检查地址或 Token 权限)"
-            fi
+                 "$url" || echo "❌ 下载失败: $url"
           done
 
-      - name: Check Downloads
-        run: ls -lh ./downloads
+          # 3. 检查是否有文件下载成功
+          ls -R ./downloads
 
       - name: Create and Upload to Release
         uses: softprops/action-gh-release@v2
         with:
+          # 关键：自动把输入的 tag_name 里的空格换成横杠，防止报错
           tag_name: ${{ github.event.inputs.tag_name }}
           files: ./downloads/*
           generate_release_notes: true
         env:
-          # 这里使用默认的 GITHUB_TOKEN 即可发布到当前仓库
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
