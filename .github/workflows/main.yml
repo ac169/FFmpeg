@@ -21,39 +21,38 @@ jobs:
         run: |
           mkdir -p ./downloads
           
-          # 1. 使用 EOF 方式将环境变量写入文件，这能完美保留换行
-          cat <<EOF > urls.txt
-          $RAW_URLS
-          EOF
+          # 1. 强力清洗：删除所有空格、换行符和回车符
+          # 确保输入变成纯粹的 url1,url2,url3 格式
+          CLEAN_INPUT=$(echo "$RAW_INPUT" | tr -d '[:space:]\r\n')
+          
+          echo "--- 待下载列表（逗号分割） ---"
+          echo "$CLEAN_INPUT"
+          echo "---------------------------"
 
-          # 2. 逐行读取并清理（去除首尾空格、回车符 \r 和空行）
-          # 特别注意：Windows 粘贴过来的文本可能带有 \r，必须删掉
-          sed -i 's/\r//g; /^$/d; s/^[[:space:]]*//; s/[[:space:]]*$//' urls.txt
-
-          echo "--- 待下载列表 ---"
-          cat urls.txt
-          echo "------------------"
-
-          while IFS= read -r url; do
+          # 2. 将逗号替换为空格，循环处理每一个 URL
+          # 使用 IFS=',' 读取可以完美处理逗号分隔符
+          IFS=',' read -ra ADDR <<< "$CLEAN_INPUT"
+          for url in "${ADDR[@]}"; do
             [ -z "$url" ] && continue
             
-            # 提取文件名（过滤掉 URL 参数）
-            clean_url=$(echo "$url" | cut -d'?' -f1)
-            filename=$(basename "$clean_url")
+            # 提取文件名（去除 ? 后的参数）
+            # 例如: https://.../file.zip?token=xxx -> file.zip
+            filename=$(basename "${url%%\?*}")
             
             echo "开始下载: $filename"
             
-            # 执行下载，务必加双引号包裹 "$url"
+            # 3. 执行下载，使用 -f 确保 HTTP 错误时返回非零状态
             curl -H "Authorization: token $PRIVATE_TOKEN" \
-                 -L -o "./downloads/$filename" \
+                 -L -f -s -S \
+                 -o "./downloads/$filename" \
                  "$url"
 
             if [ $? -eq 0 ]; then
                echo "✅ 成功: $filename"
             else
-               echo "❌ 失败: $url"
+               echo "❌ 失败: $url (请检查地址或 Token 权限)"
             fi
-          done < urls.txt
+          done
 
       - name: Check Downloads
         run: ls -lh ./downloads
