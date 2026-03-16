@@ -13,23 +13,46 @@ jobs:
   upload:
     runs-on: ubuntu-latest
     steps:
-      - name: Download Private Files
+      - name: Download Multiple Files
         env:
-          # 使用具有源私有库读取权限的 PAT
+          # 关键：先将 inputs 存入环境变量，避免 shell 注入和换行符丢失
+          RAW_URLS: ${{ github.event.inputs.file_urls }}
           PRIVATE_TOKEN: ${{ secrets.EXTERNAL_REPO_TOKEN }}
         run: |
           mkdir -p ./downloads
-          # 处理输入的 URL 列表
-          echo "${{ github.event.inputs.file_urls }}" > urls.txt
           
-          while IFS= read -r url || [ -n "$url" ]; do
+          # 1. 使用 EOF 方式将环境变量写入文件，这能完美保留换行
+          cat <<EOF > urls.txt
+          $RAW_URLS
+          EOF
+
+          # 2. 逐行读取并清理（去除首尾空格、回车符 \r 和空行）
+          # 特别注意：Windows 粘贴过来的文本可能带有 \r，必须删掉
+          sed -i 's/\r//g; /^$/d; s/^[[:space:]]*//; s/[[:space:]]*$//' urls.txt
+
+          echo "--- 待下载列表 ---"
+          cat urls.txt
+          echo "------------------"
+
+          while IFS= read -r url; do
             [ -z "$url" ] && continue
-            echo "正在授权下载: $url"
             
-            # 关键：添加 Authorization Header
-            # -J 使用服务器提供文件名, -L 跟随重定向
+            # 提取文件名（过滤掉 URL 参数）
+            clean_url=$(echo "$url" | cut -d'?' -f1)
+            filename=$(basename "$clean_url")
+            
+            echo "开始下载: $filename"
+            
+            # 执行下载，务必加双引号包裹 "$url"
             curl -H "Authorization: token $PRIVATE_TOKEN" \
-                 -L -J -O --output-dir ./downloads "$url"
+                 -L -o "./downloads/$filename" \
+                 "$url"
+
+            if [ $? -eq 0 ]; then
+               echo "✅ 成功: $filename"
+            else
+               echo "❌ 失败: $url"
+            fi
           done < urls.txt
 
       - name: Check Downloads
