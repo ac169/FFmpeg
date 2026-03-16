@@ -1,0 +1,49 @@
+name: Manual Sync Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag'
+        required: true
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download from Private Repo
+        env:
+          GH_TOKEN: ${{ secrets.EXTERNAL_REPO_TOKEN }}
+          REMOTE_REPO: "ac169/FFmpeg-Builds-Legacy"
+        run: |
+          mkdir -p ./downloads
+          
+          # 1. 抓取源 Release 的标题和正文 (用于同步信息)
+          # 使用 --json 提取并存入环境变量
+          # echo "RELEASE_TITLE=$(gh release view ${{ github.event.inputs.tag_name }} --repo $REMOTE_REPO --json title -q .title)" >> $GITHUB_ENV
+          # echo "RELEASE_BODY=$(gh release view ${{ github.event.inputs.tag_name }} --repo $REMOTE_REPO --json body -q .body)" >> $GITHUB_ENV
+          
+          TITLE=$(gh release view "${{ github.event.inputs.tag_name }}" --repo $REMOTE_REPO --json name --template '{{.name}}')
+          echo "RELEASE_TITLE=$RELEASE_TITLE" >> $GITHUB_ENV
+          
+          # 2. 抓取正文存入文件
+          gh release view "$TAG" --repo "$REMOTE_REPO" --json body --template '{{.body}}' > release_body.md
+
+          # 3. 直接下载所有 Assets
+          gh release download ${{ github.event.inputs.tag_name }} \
+             --repo $REMOTE_REPO \
+             --dir ./downloads \
+             --clobber
+
+          ls -R ./downloads
+
+      - name: Create and Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag_name }}
+          name: ${{ env.RELEASE_TITLE }}
+          body_path: release_body.md
+          files: ./downloads/*
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
