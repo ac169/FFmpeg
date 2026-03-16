@@ -14,7 +14,7 @@ jobs:
       - name: Download from Private Repo
         env:
           GH_TOKEN: ${{ secrets.EXTERNAL_REPO_TOKEN }}
-          REMOTE_REPO: "ac169/FFmpeg-Builds-Legacy"
+          REMOTE_REPO: ${{ secrets.EXTERNAL_REMOTE_REPO }}
         run: |
           mkdir -p ./downloads
           
